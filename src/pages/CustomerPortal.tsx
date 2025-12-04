@@ -10,7 +10,9 @@ import {
   Package, 
   Upload, 
   CheckCircle,
-  ArrowRight
+  ArrowRight,
+  X,
+  Video
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -19,6 +21,7 @@ const CustomerPortal = () => {
   const { addReturn, setActiveInspection } = useDemo();
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [currentStage, setCurrentStage] = useState(0);
+  const [uploadedFiles, setUploadedFiles] = useState<{ file: File; preview: string }[]>([]);
   const [formData, setFormData] = useState({
     customerName: '',
     orderId: '',
@@ -26,6 +29,26 @@ const CustomerPortal = () => {
     reason: '',
     returnType: 'refund' as 'refund' | 'replacement',
   });
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    
+    const newFiles = Array.from(files).map(file => ({
+      file,
+      preview: URL.createObjectURL(file),
+    }));
+    setUploadedFiles(prev => [...prev, ...newFiles]);
+  };
+
+  const removeFile = (index: number) => {
+    setUploadedFiles(prev => {
+      const updated = [...prev];
+      URL.revokeObjectURL(updated[index].preview);
+      updated.splice(index, 1);
+      return updated;
+    });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -211,7 +234,14 @@ const CustomerPortal = () => {
 
           <div className="space-y-2">
             <Label>Upload Photo/Video (Optional)</Label>
-            <div className="border-2 border-dashed border-border rounded-xl p-8 text-center hover:border-primary/50 transition-colors cursor-pointer">
+            <label className="border-2 border-dashed border-border rounded-xl p-8 text-center hover:border-primary/50 transition-colors cursor-pointer block">
+              <input
+                type="file"
+                accept="image/*,video/*"
+                multiple
+                onChange={handleFileUpload}
+                className="hidden"
+              />
               <Upload className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
               <p className="text-sm text-muted-foreground">
                 Drag and drop or click to upload
@@ -219,7 +249,37 @@ const CustomerPortal = () => {
               <p className="text-xs text-muted-foreground mt-1">
                 PNG, JPG, MP4 up to 50MB
               </p>
-            </div>
+            </label>
+            
+            {uploadedFiles.length > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
+                {uploadedFiles.map((item, index) => (
+                  <div key={index} className="relative group rounded-lg overflow-hidden border bg-secondary/30">
+                    {item.file.type.startsWith('video/') ? (
+                      <div className="aspect-square flex items-center justify-center bg-secondary">
+                        <Video className="w-8 h-8 text-muted-foreground" />
+                        <span className="absolute bottom-2 left-2 text-xs text-muted-foreground truncate max-w-[80%]">
+                          {item.file.name}
+                        </span>
+                      </div>
+                    ) : (
+                      <img
+                        src={item.preview}
+                        alt={item.file.name}
+                        className="aspect-square object-cover"
+                      />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => removeFile(index)}
+                      className="absolute top-1 right-1 p-1 rounded-full bg-background/80 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive hover:text-destructive-foreground"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <Button type="submit" variant="hero" size="lg" className="w-full">
