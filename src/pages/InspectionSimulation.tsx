@@ -5,7 +5,8 @@ import { InspectionProgress } from '@/components/InspectionProgress';
 import { RoboticArmAnimation } from '@/components/RoboticArmAnimation';
 import { FraudScoreMeter } from '@/components/FraudScoreMeter';
 import { useDemo } from '@/context/DemoContext';
-import { inspectionStages, generateFraudScore, getStatusFromScore, getStatusBgColor } from '@/utils/fraudLogic';
+import { inspectionStages, generateFraudScore, getStatusFromScore } from '@/utils/fraudLogic';
+import { getStatusDisplay, type ReturnStatus } from '@/config/statusDisplay';
 import { 
   ScanLine, 
   Play,
@@ -72,22 +73,8 @@ const InspectionSimulation = () => {
     setFraudScore(0);
   };
 
-  const status = showResults ? getStatusFromScore(fraudScore) : 'pending';
-
-  const getStatusDisplay = () => {
-    switch (status) {
-      case 'approved':
-        return { icon: CheckCircle, label: 'Approved', color: 'text-success' };
-      case 'flagged':
-        return { icon: AlertTriangle, label: 'Flagged for Review', color: 'text-warning' };
-      case 'rejected':
-        return { icon: XCircle, label: 'Rejected', color: 'text-destructive' };
-      default:
-        return { icon: ScanLine, label: 'Pending', color: 'text-muted-foreground' };
-    }
-  };
-
-  const statusDisplay = getStatusDisplay();
+  const status: ReturnStatus = showResults ? getStatusFromScore(fraudScore) : 'pending';
+  const statusDisplay = getStatusDisplay(status);
 
   return (
     <div className="min-h-screen bg-background p-8">
@@ -213,9 +200,11 @@ const InspectionSimulation = () => {
                     </div>
                     <div className="text-right">
                       <p className="text-sm text-muted-foreground mb-2">Decision</p>
-                      <Badge className={getStatusBgColor(status)}>
+                      <Badge className={statusDisplay.badgeClassName}>
                         <statusDisplay.icon className="w-4 h-4" />
-                        <span className="ml-1">{statusDisplay.label}</span>
+                        <span className="ml-1">
+                          {statusDisplay.longLabel ?? statusDisplay.label}
+                        </span>
                       </Badge>
                     </div>
                   </div>
@@ -223,9 +212,7 @@ const InspectionSimulation = () => {
                   <div className="p-4 rounded-xl bg-muted/50">
                     <h3 className="font-medium mb-2">Analysis Summary</h3>
                     <p className="text-sm text-muted-foreground">
-                      {status === 'approved' && 'Item passed all verification checks. No signs of tampering or fraud detected.'}
-                      {status === 'flagged' && 'Some anomalies detected. Manual review recommended before processing.'}
-                      {status === 'rejected' && 'Multiple fraud indicators detected. Return request should be denied.'}
+                      {statusDisplay.analysisSummary}
                     </p>
                   </div>
                 </div>
