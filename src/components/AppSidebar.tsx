@@ -1,13 +1,14 @@
 import { Link, useLocation } from 'react-router-dom';
-import { 
-  Home, 
-  Package, 
-  Store, 
-  LayoutDashboard, 
+import {
+  Home,
+  Package,
+  Store,
+  LayoutDashboard,
   ScanLine,
   Play,
   X,
-  Menu
+  Menu,
+  Cpu
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -20,6 +21,7 @@ const navItems = [
   { path: '/seller', label: 'Seller Portal', icon: Store },
   { path: '/admin', label: 'Admin Dashboard', icon: LayoutDashboard },
   { path: '/inspection', label: 'Inspection Sim', icon: ScanLine },
+  { path: '/operator', label: 'Robot Control', icon: Cpu },
 ];
 
 export const AppSidebar = () => {

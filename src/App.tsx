@@ -11,6 +11,7 @@ import SellerPortal from "./pages/SellerPortal";
 import AdminDashboard from "./pages/AdminDashboard";
 import InspectionSimulation from "./pages/InspectionSimulation";
 import NotFound from "./pages/NotFound";
+import RobotControl from "./pages/RobotControl";
 
 const queryClient = new QueryClient();
 
@@ -38,6 +39,7 @@ const App = () => (
             <Route path="/seller" element={<AppLayout><SellerPortal /></AppLayout>} />
             <Route path="/admin" element={<AppLayout><AdminDashboard /></AppLayout>} />
             <Route path="/inspection" element={<AppLayout><InspectionSimulation /></AppLayout>} />
+            <Route path="/operator" element={<AppLayout><RobotControl /></AppLayout>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
