@@ -10,8 +10,10 @@ import { toast } from 'sonner';
 export default function RobotControl() {
     const [url, setUrl] = useState('ws://localhost:9090');
     const [isConnected, setIsConnected] = useState(false);
+    const [chatterMessages, setChatterMessages] = useState<string[]>([]);
     const rosRef = useRef<ROSLIB.Ros | null>(null);
     const cmdVelRef = useRef<ROSLIB.Topic | null>(null);
+    const chatterRef = useRef<ROSLIB.Topic | null>(null);
 
     useEffect(() => {
         // Cleanup on unmount
@@ -40,6 +42,17 @@ export default function RobotControl() {
                     name: '/cmd_vel',
                     messageType: 'geometry_msgs/Twist'
                 });
+
+                // Setup chatter subscriber
+                chatterRef.current = new ROSLIB.Topic({
+                    ros: ros,
+                    name: '/chatter',
+                    messageType: 'std_msgs/String'
+                });
+
+                chatterRef.current.subscribe((message: any) => {
+                    setChatterMessages((prev) => [...prev.slice(-9), message.data]);
+                });
             });
 
             ros.on('error', (error) => {
@@ -51,6 +64,10 @@ export default function RobotControl() {
                 setIsConnected(false);
                 toast.info('Disconnected from ROS server.');
                 cmdVelRef.current = null;
+                if (chatterRef.current) {
+                    chatterRef.current.unsubscribe();
+                    chatterRef.current = null;
+                }
             });
 
             rosRef.current = ros;
@@ -62,6 +79,9 @@ export default function RobotControl() {
 
     const disconnect = () => {
         if (rosRef.current) {
+            if (chatterRef.current) {
+                chatterRef.current.unsubscribe();
+            }
             rosRef.current.close();
             rosRef.current = null;
         }
@@ -203,6 +223,28 @@ export default function RobotControl() {
                         <p className="text-xs text-muted-foreground mt-6 text-center">
                             Press and hold buttons to move the robot.
                         </p>
+                    </CardContent>
+                </Card>
+                {/* Diagnostics / Chatter Panel */}
+                <Card className={`col-span-1 md:col-span-2 ${!isConnected ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Wifi className="w-5 h-5" /> Diagnostics Listener
+                        </CardTitle>
+                        <CardDescription>Listening for messages on the /chatter topic.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="bg-muted p-4 rounded-md font-mono text-sm min-h-[150px] flex flex-col justify-end">
+                            {chatterMessages.length === 0 ? (
+                                <span className="text-muted-foreground italic">Waiting for messages...</span>
+                            ) : (
+                                chatterMessages.map((msg, idx) => (
+                                    <div key={idx} className="text-green-600 dark:text-green-400">
+                                        &gt; {msg}
+                                    </div>
+                                ))
+                            )}
+                        </div>
                     </CardContent>
                 </Card>
             </div>
