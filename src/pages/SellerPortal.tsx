@@ -5,16 +5,14 @@ import { Input } from '@/components/ui/input';
 import { CountdownTimer } from '@/components/CountdownTimer';
 import { FraudScoreMeter } from '@/components/FraudScoreMeter';
 import { useDemo } from '@/context/DemoContext';
-import { generateMockReturns, getStatusBgColor, ReturnItem } from '@/utils/fraudLogic';
+import { generateMockReturns, ReturnItem } from '@/utils/fraudLogic';
+import { getStatusDisplay, type ReturnStatus } from '@/config/statusDisplay';
 import { 
   Store, 
   Search, 
   Filter,
   RefreshCw,
   Eye,
-  CheckCircle,
-  AlertTriangle,
-  XCircle,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
@@ -50,19 +48,6 @@ const SellerPortal = () => {
   );
 
   const totalPages = Math.ceil(filteredReturns.length / itemsPerPage);
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'approved':
-        return <CheckCircle className="w-4 h-4" />;
-      case 'flagged':
-        return <AlertTriangle className="w-4 h-4" />;
-      case 'rejected':
-        return <XCircle className="w-4 h-4" />;
-      default:
-        return <Eye className="w-4 h-4" />;
-    }
-  };
 
   return (
     <div className="min-h-screen bg-background p-8">
@@ -153,10 +138,17 @@ const SellerPortal = () => {
                       <FraudScoreMeter score={item.fraudScore} size="sm" />
                     </td>
                     <td className="p-4">
-                      <Badge className={getStatusBgColor(item.status)}>
-                        {getStatusIcon(item.status)}
-                        <span className="ml-1 capitalize">{item.status}</span>
-                      </Badge>
+                      {(() => {
+                        const { icon: StatusIcon, badgeClassName, label } = getStatusDisplay(
+                          item.status as ReturnStatus
+                        );
+                        return (
+                          <Badge className={badgeClassName}>
+                            <StatusIcon className="w-4 h-4" />
+                            <span className="ml-1">{label}</span>
+                          </Badge>
+                        );
+                      })()}
                     </td>
                     <td className="p-4 min-w-[140px]">
                       <CountdownTimer expiresAt={item.expiresAt} />

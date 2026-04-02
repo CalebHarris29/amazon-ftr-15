@@ -1,4 +1,5 @@
 // Mock fraud detection logic for demo purposes
+import { getStatusDisplay, type ReturnStatus } from '@/config/statusDisplay';
 
 export interface ReturnItem {
   id: string;
@@ -10,7 +11,7 @@ export interface ReturnItem {
   imageUrl?: string;
   submittedAt: Date;
   fraudScore: number;
-  status: 'pending' | 'inspecting' | 'approved' | 'flagged' | 'rejected';
+  status: ReturnStatus;
   inspectionStage: number;
   expiresAt: Date;
   notes?: string;
@@ -20,40 +21,21 @@ export const generateFraudScore = (): number => {
   return Math.floor(Math.random() * 100) + 1;
 };
 
-export const getStatusFromScore = (score: number): 'approved' | 'flagged' | 'rejected' => {
+export const getStatusFromScore = (score: number): Extract<
+  ReturnStatus,
+  'approved' | 'flagged' | 'rejected'
+> => {
   if (score > 90) return 'rejected';
   if (score > 70) return 'flagged';
   return 'approved';
 };
 
-export const getStatusColor = (status: string): string => {
-  switch (status) {
-    case 'approved':
-      return 'text-success';
-    case 'flagged':
-      return 'text-warning';
-    case 'rejected':
-      return 'text-destructive';
-    case 'inspecting':
-      return 'text-primary';
-    default:
-      return 'text-muted-foreground';
-  }
+export const getStatusColor = (status: ReturnStatus): string => {
+  return getStatusDisplay(status).textClassName;
 };
 
-export const getStatusBgColor = (status: string): string => {
-  switch (status) {
-    case 'approved':
-      return 'bg-success/10 text-success border-success/20';
-    case 'flagged':
-      return 'bg-warning/10 text-warning border-warning/20';
-    case 'rejected':
-      return 'bg-destructive/10 text-destructive border-destructive/20';
-    case 'inspecting':
-      return 'bg-primary/10 text-primary border-primary/20';
-    default:
-      return 'bg-muted text-muted-foreground border-border';
-  }
+export const getStatusBgColor = (status: ReturnStatus): string => {
+  return getStatusDisplay(status).badgeClassName;
 };
 
 export const formatTimeRemaining = (expiresAt: Date): string => {
