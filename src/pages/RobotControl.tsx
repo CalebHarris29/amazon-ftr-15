@@ -4,16 +4,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Cpu, Wifi, WifiOff, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Disc } from 'lucide-react';
+import { Cpu, Wifi, WifiOff, Home, ArrowDownToLine, Play, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function RobotControl() {
     const [url, setUrl] = useState('ws://localhost:9090');
     const [isConnected, setIsConnected] = useState(false);
     const [chatterMessages, setChatterMessages] = useState<string[]>([]);
+    const [activePose, setActivePose] = useState<string | null>(null);
     const rosRef = useRef<ROSLIB.Ros | null>(null);
-    const cmdVelRef = useRef<ROSLIB.Topic | null>(null);
     const chatterRef = useRef<ROSLIB.Topic | null>(null);
+    const poseCommandRef = useRef<ROSLIB.Topic | null>(null);
 
     useEffect(() => {
         // Cleanup on unmount
@@ -36,11 +37,11 @@ export default function RobotControl() {
                 setIsConnected(true);
                 toast.success('Connected to ROS websocket server.');
 
-                // Setup cmd_vel publisher
-                cmdVelRef.current = new ROSLIB.Topic({
+                // Setup pose command publisher
+                poseCommandRef.current = new ROSLIB.Topic({
                     ros: ros,
-                    name: '/cmd_vel',
-                    messageType: 'geometry_msgs/Twist'
+                    name: '/pose_command', // A generic string topic
+                    messageType: 'std_msgs/String'
                 });
 
                 // Setup chatter subscriber
@@ -63,7 +64,7 @@ export default function RobotControl() {
             ros.on('close', () => {
                 setIsConnected(false);
                 toast.info('Disconnected from ROS server.');
-                cmdVelRef.current = null;
+                poseCommandRef.current = null;
                 if (chatterRef.current) {
                     chatterRef.current.unsubscribe();
                     chatterRef.current = null;
@@ -87,23 +88,24 @@ export default function RobotControl() {
         }
     };
 
-    const publishTwist = (linearX: number, angularZ: number) => {
-        if (!isConnected || !cmdVelRef.current) {
+    const publishPose = (poseName: string) => {
+        setActivePose(poseName);
+        if (!isConnected || !poseCommandRef.current) {
             toast.warning('Not connected to robot.');
             return;
         }
 
-        // @ts-expect-error ROSLIB type definition might be missing Message but it exists in JS
-        const twist = new ROSLIB.Message({
-            linear: { x: linearX, y: 0.0, z: 0.0 },
-            angular: { x: 0.0, y: 0.0, z: angularZ }
+        // @ts-expect-error ROSLIB typing missing in older versions
+        const msg = new ROSLIB.Message({
+            data: poseName
         });
 
         try {
-            cmdVelRef.current.publish(twist);
+            poseCommandRef.current.publish(msg);
+            toast.success(`Sent command to move to ${poseName}`);
         } catch (e) {
-            console.error('Failed to publish', e);
-            toast.error('Failed to send command.');
+            console.error('Failed to publish pose', e);
+            toast.error('Failed to send pose command.');
         }
     };
 
@@ -157,72 +159,47 @@ export default function RobotControl() {
                     </CardFooter>
                 </Card>
 
-                {/* Teleoperation Panel */}
+                {/* Pose Control Panel */}
                 <Card className={!isConnected ? 'opacity-50 pointer-events-none' : ''}>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
-                            <Disc className="w-5 h-5" /> Teleoperation
+                            <Zap className="w-5 h-5 text-amber-500" /> Pre-Programmed Poses
                         </CardTitle>
-                        <CardDescription>Send velocity commands directly to /cmd_vel.</CardDescription>
+                        <CardDescription>Send predefined trajectory goals to the Kinova Arm.</CardDescription>
                     </CardHeader>
-                    <CardContent className="flex flex-col items-center justify-center p-6">
-                        <div className="grid grid-cols-3 gap-2">
-                            {/* Top Row */}
-                            <div />
-                            <Button
-                                variant="outline"
-                                className="h-16 w-16"
-                                onMouseDown={() => publishTwist(0.5, 0)}
-                                onMouseUp={() => publishTwist(0, 0)}
-                                onMouseLeave={() => publishTwist(0, 0)}
-                            >
-                                <ArrowUp className="w-6 h-6" />
-                            </Button>
-                            <div />
-
-                            {/* Middle Row */}
-                            <Button
-                                variant="outline"
-                                className="h-16 w-16"
-                                onMouseDown={() => publishTwist(0, 0.5)}
-                                onMouseUp={() => publishTwist(0, 0)}
-                                onMouseLeave={() => publishTwist(0, 0)}
-                            >
-                                <ArrowLeft className="w-6 h-6" />
-                            </Button>
-                            <Button
-                                variant="destructive"
-                                className="h-16 w-16"
-                                onClick={() => publishTwist(0, 0)}
-                            >
-                                <Disc className="w-6 h-6" />
-                            </Button>
-                            <Button
-                                variant="outline"
-                                className="h-16 w-16"
-                                onMouseDown={() => publishTwist(0, -0.5)}
-                                onMouseUp={() => publishTwist(0, 0)}
-                                onMouseLeave={() => publishTwist(0, 0)}
-                            >
-                                <ArrowRight className="w-6 h-6" />
-                            </Button>
-
-                            {/* Bottom Row */}
-                            <div />
-                            <Button
-                                variant="outline"
-                                className="h-16 w-16"
-                                onMouseDown={() => publishTwist(-0.5, 0)}
-                                onMouseUp={() => publishTwist(0, 0)}
-                                onMouseLeave={() => publishTwist(0, 0)}
-                            >
-                                <ArrowDown className="w-6 h-6" />
-                            </Button>
-                            <div />
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-6 text-center">
-                            Press and hold buttons to move the robot.
-                        </p>
+                    <CardContent className="grid grid-cols-2 gap-4">
+                        <Button 
+                            variant={activePose === 'Home' ? 'default' : 'outline'} 
+                            className="h-24 flex flex-col gap-2 transition-all hover:scale-105"
+                            onClick={() => publishPose('Home')}
+                        >
+                            <Home className="w-6 h-6" />
+                            Return Home
+                        </Button>
+                        <Button 
+                            variant={activePose === 'Retract' ? 'default' : 'outline'} 
+                            className="h-24 flex flex-col gap-2 transition-all hover:scale-105"
+                            onClick={() => publishPose('Retract')}
+                        >
+                            <ArrowDownToLine className="w-6 h-6" />
+                            Retract Arm
+                        </Button>
+                        <Button 
+                            variant={activePose === 'Observe' ? 'default' : 'outline'} 
+                            className="h-24 flex flex-col gap-2 transition-all hover:scale-105"
+                            onClick={() => publishPose('Observe')}
+                        >
+                            <Play className="w-6 h-6" />
+                            Observe Position
+                        </Button>
+                        <Button 
+                            variant={activePose === 'Pick' ? 'default' : 'outline'} 
+                            className="h-24 flex flex-col gap-2 transition-all hover:scale-105"
+                            onClick={() => publishPose('Pick')}
+                        >
+                            <Zap className="w-6 h-6" />
+                            Pick Object
+                        </Button>
                     </CardContent>
                 </Card>
                 {/* Diagnostics / Chatter Panel */}
