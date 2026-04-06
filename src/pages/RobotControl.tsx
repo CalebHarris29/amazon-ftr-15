@@ -41,14 +41,17 @@ export default function RobotControl() {
                 poseCommandRef.current = new ROSLIB.Topic({
                     ros: ros,
                     name: '/pose_command', // A generic string topic
-                    messageType: 'std_msgs/String'
+                    messageType: 'std_msgs/msg/String',
+                    latch: true
                 });
+                // Explicitly advertise to avoid lazy-loading bugs in rosbridge
+                poseCommandRef.current.advertise();
 
                 // Setup chatter subscriber
                 chatterRef.current = new ROSLIB.Topic({
                     ros: ros,
                     name: '/chatter',
-                    messageType: 'std_msgs/String'
+                    messageType: 'std_msgs/msg/String'
                 });
 
                 chatterRef.current.subscribe((message: any) => {
@@ -101,8 +104,22 @@ export default function RobotControl() {
         });
 
         try {
-            poseCommandRef.current.publish(msg);
-            toast.success(`Sent command to move to ${poseName}`);
+            // Bypass roslibjs buggy serialization and force raw JSON over the wire
+            const rawSocket = (rosRef.current as any)?.socket;
+            if (rawSocket && rawSocket.readyState === WebSocket.OPEN) {
+                rawSocket.send(JSON.stringify({
+                    op: 'publish',
+                    topic: '/pose_command',
+                    msg: {
+                        data: poseName
+                    }
+                }));
+            } else {
+                // Fallback to standard roslib if socket isn't exposed
+                poseCommandRef.current.publish(msg);
+            }
+            
+            toast.success(`Forced raw payload for: ${poseName}`);
         } catch (e) {
             console.error('Failed to publish pose', e);
             toast.error('Failed to send pose command.');
@@ -159,47 +176,35 @@ export default function RobotControl() {
                     </CardFooter>
                 </Card>
 
-                {/* Pose Control Panel */}
+                {/* Middleman Command Terminal */}
                 <Card className={!isConnected ? 'opacity-50 pointer-events-none' : ''}>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
-                            <Zap className="w-5 h-5 text-amber-500" /> Pre-Programmed Poses
+                            <Zap className="w-5 h-5 text-amber-500" /> Middleman Command Terminal
                         </CardTitle>
-                        <CardDescription>Send predefined trajectory goals to the Kinova Arm.</CardDescription>
+                        <CardDescription>Directly publish custom string signals to your Python script.</CardDescription>
                     </CardHeader>
-                    <CardContent className="grid grid-cols-2 gap-4">
-                        <Button 
-                            variant={activePose === 'Home' ? 'default' : 'outline'} 
-                            className="h-24 flex flex-col gap-2 transition-all hover:scale-105"
-                            onClick={() => publishPose('Home')}
-                        >
-                            <Home className="w-6 h-6" />
-                            Return Home
-                        </Button>
-                        <Button 
-                            variant={activePose === 'Retract' ? 'default' : 'outline'} 
-                            className="h-24 flex flex-col gap-2 transition-all hover:scale-105"
-                            onClick={() => publishPose('Retract')}
-                        >
-                            <ArrowDownToLine className="w-6 h-6" />
-                            Retract Arm
-                        </Button>
-                        <Button 
-                            variant={activePose === 'Observe' ? 'default' : 'outline'} 
-                            className="h-24 flex flex-col gap-2 transition-all hover:scale-105"
-                            onClick={() => publishPose('Observe')}
-                        >
-                            <Play className="w-6 h-6" />
-                            Observe Position
-                        </Button>
-                        <Button 
-                            variant={activePose === 'Pick' ? 'default' : 'outline'} 
-                            className="h-24 flex flex-col gap-2 transition-all hover:scale-105"
-                            onClick={() => publishPose('Pick')}
-                        >
-                            <Zap className="w-6 h-6" />
-                            Pick Object
-                        </Button>
+                    <CardContent className="space-y-4">
+                        <div className="flex gap-2">
+                            <Input 
+                                placeholder="Type a command (e.g., 'Pick', 'Home')" 
+                                value={activePose}
+                                onChange={(e) => setActivePose(e.target.value)}
+                            />
+                            <Button 
+                                onClick={() => publishPose(activePose || 'Empty String')}
+                                className="bg-amber-600 hover:bg-amber-700 text-white min-w-[140px]"
+                            >
+                                Execute Send
+                            </Button>
+                        </div>
+                        <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-border">
+                            <p className="text-sm font-medium w-full text-muted-foreground mb-1">Quick Fills:</p>
+                            <Button variant="secondary" size="sm" onClick={() => setActivePose('Home')}>Home</Button>
+                            <Button variant="secondary" size="sm" onClick={() => setActivePose('Retract')}>Retract</Button>
+                            <Button variant="secondary" size="sm" onClick={() => setActivePose('Observe')}>Observe</Button>
+                            <Button variant="secondary" size="sm" onClick={() => setActivePose('Pick')}>Pick</Button>
+                        </div>
                     </CardContent>
                 </Card>
                 {/* Diagnostics / Chatter Panel */}
