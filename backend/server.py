@@ -2,7 +2,7 @@ from flask import Flask, request
 from flask_cors import CORS
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import TwistStamped
+from geometry_msgs.msg import Twist
 
 # This file is meant to be executed on the Ubuntu Linux machine 
 # hosting the ROS 2 Humble environment and the physical robot drivers.
@@ -18,7 +18,7 @@ def init_ros():
     rclpy.init()
     ros_node = rclpy.create_node('http_joystick')
     # Connects to the Kinova Cartesian Velocity Controller
-    twist_pub = ros_node.create_publisher(TwistStamped, '/twist_controller/commands', 10)
+    twist_pub = ros_node.create_publisher(Twist, '/twist_controller/commands', 10)
 
 @app.route('/twist', methods=['POST', 'GET'])
 def handle_twist():
@@ -28,11 +28,10 @@ def handle_twist():
     lz = float(request.args.get('lz', 0.0))
     
     # Format into a native ROS 2 physical geometry packet
-    msg = TwistStamped()
-    msg.header.frame_id = "base_link"
-    msg.twist.linear.x = lx
-    msg.twist.linear.y = ly
-    msg.twist.linear.z = lz
+    msg = Twist()
+    msg.linear.x = lx
+    msg.linear.y = ly
+    msg.linear.z = lz
     
     # Physically push the command to the robotic arm
     twist_pub.publish(msg)
