@@ -1,73 +1,85 @@
-# Welcome to your Lovable project
+# ROS 2 Dual-Architecture Web Dashboard
 
-## Project info
+A robust, high-speed web interface designed to teleport raw physical velocity commands (TwistStamped) to a ROS 2 robot environment natively across the network. 
 
-**URL**: https://lovable.dev/projects/29493255-6d3d-4244-8c0b-c67b6e5487b9
+## Architectural Overview
+This dashboard utilizes a **Dual-Architecture** pipeline to seamlessly bypass firewall constraints and WebSocket packet drops typical in `rosbridge_suite` Humble deployments over enterprise WiFi:
 
-## How can I edit this code?
+1. **Inbound Fast-Track (HTTP POST)**: Web UI joystick movements are fired as raw HTTP `fetch()` parameters directly to a dedicated lightweight Python Flask node (`server.py`) sitting natively on the Linux ROS 2 machine.
+2. **Outbound Diagnostic Stream (WebSockets)**: The React app simultaneously sustains a standard `roslibjs` proxy connection to the `rosbridge_server` strictly to digest returning diagnostic streams (e.g., `/chatter`).
 
-There are several ways of editing your application.
+---
 
-**Use Lovable**
+## 🚀 Setup Instructions
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/29493255-6d3d-4244-8c0b-c67b6e5487b9) and start prompting.
+### Part 1: Linux Robot Environment Setup
+*The physical robot and the drivers live here.*
 
-Changes made via Lovable will be committed automatically to this repo.
+1. **Install Requirements:** Make sure your Ubuntu/Linux machine has standard Python web hosting capabilities installed.
+   ```bash
+   sudo apt install python3-flask python3-flask-cors
+   ```
 
-**Use your preferred IDE**
+2. **Create the HTTP Middleman (`server.py`):**
+   Somewhere in your ROS 2 workspace, create a file named `server.py` and paste the following Python code into it:
+   ```python
+   from flask import Flask, request
+   from flask_cors import CORS
+   import rclpy
+   from rclpy.node import Node
+   from geometry_msgs.msg import TwistStamped
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+   app = Flask(__name__)
+   CORS(app) 
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+   ros_node = None
+   twist_pub = None
 
-Follow these steps:
+   def init_ros():
+       global ros_node, twist_pub
+       rclpy.init()
+       ros_node = rclpy.create_node('http_joystick')
+       twist_pub = ros_node.create_publisher(TwistStamped, '/twist_controller/commands', 10)
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+   @app.route('/twist', methods=['POST', 'GET'])
+   def handle_twist():
+       lx = float(request.args.get('lx', 0.0))
+       ly = float(request.args.get('ly', 0.0))
+       lz = float(request.args.get('lz', 0.0))
+       
+       msg = TwistStamped()
+       msg.header.frame_id = "base_link"
+       msg.twist.linear.x = lx
+       msg.twist.linear.y = ly
+       msg.twist.linear.z = lz
+       
+       twist_pub.publish(msg)
+       return "OK", 200
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+   if __name__ == '__main__':
+       init_ros()
+       app.run(host='0.0.0.0', port=5000)
+   ```
 
-# Step 3: Install the necessary dependencies.
-npm i
+3. **Start the Dual Servers:** You will need two terminal windows open on your Linux machine.
+   * **Terminal 1:** Run `rosbridge_server`
+   * **Terminal 2:** Run `source /opt/ros/humble/setup.bash && python3 server.py`
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+---
 
-**Edit a file directly in GitHub**
+### Part 2: Mac / Web Dashboard Setup
+*The Operator Control Station.*
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+1. **Install Dependencies & Run:**
+   ```bash
+   npm i
+   npm run dev
+   ```
+2. **Connect the UI:** 
+   * When the React app opens in your browser, look for the **Connection Settings** card.
+   * Type in the Web Socket URL of your Linux Machine (Example: `ws://10.26.97.120:9090`).
+   * Click **Connect**. The dot will turn Green, indicating the diagnostic stream is active.
+   * *Note: The React app will dynamically extract the IP address strictly from this WebSocket URL and use it to blast the backend HTTP joystick commands to port 5000 automatically.*
 
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/29493255-6d3d-4244-8c0b-c67b6e5487b9) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+3. **Drive the Robot:**
+   Press and hold the blue Cartesian D-Pad axes. The math will stream directly to `/twist_controller/commands` at 20-Hertz!
