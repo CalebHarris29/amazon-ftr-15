@@ -21,7 +21,7 @@ This project utilizes a **Dual-Architecture** pipeline to seamlessly bypass fire
 graph TD;
     A[Human Operator] -->|X/Y/Z Joystick| B(Mac: React Dashboard);
     B -->|HTTP POST Fetch| C[Linux: Python Flask Server];
-    B <..>|WebSockets Diagnostics| D[Linux: rosbridge_server];
+    D -.->|WebSockets Diagnostics| B;
     C -->|TwistStamped Vector| E((ROS 2 Kinematic Engine));
     E -->|Motor Execution| F{Kinova Robotic Arm};
     F -.->|Status Updates| E;
