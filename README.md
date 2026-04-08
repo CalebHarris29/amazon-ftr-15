@@ -1,8 +1,8 @@
 # 📦 Amazon FTR: Automated Robotics Inspection System
 
 ![React](https://img.shields.io/badge/Frontend-React%20%7C%20TypeScript-blue)
-![ROS 2](https://img.shields.io/badge/Robotics-ROS%202%20Humble-green)
-![Python](https://img.shields.io/badge/Backend-Python%20Flask-yellow)
+![API](https://img.shields.io/badge/Robotics-Kortex%20API-green)
+![Python](https://img.shields.io/badge/Backend-Python%20FastAPI-yellow)
 ![Hardware](https://img.shields.io/badge/Hardware-Kinova%20Kortex%20Arm-red)
 
 A robust, high-speed full-stack web interface designed to teleport physical velocity commands to an industrial robotic arm natively across a network. Built as a capstone project to automate the notoriously slow, manual inspection of return processing in Amazon warehouses.
@@ -15,45 +15,46 @@ Amazon handles a massive volume of returns daily, creating a logistical bottlene
 ---
 
 ## 🏗️ System Architecture
-This project utilizes a **Dual-Architecture** pipeline to seamlessly bypass firewall constraints and WebSocket packet drops typical in `rosbridge_suite` deployments over enterprise/university Wi-Fi.
+This project has migrated from a fragile ROS 2-based architecture to a robust, native **Kortex API** implementation, utilizing a high-performance **FastAPI** backend. 
 
 ```mermaid
 graph TD;
     A[Human Operator] -->|X/Y/Z Joystick| B(Mac: React Dashboard);
-    B -->|HTTP POST Fetch| C[Linux: Python Flask Server];
-    D -.->|WebSockets Diagnostics| B;
-    C -->|TwistStamped Vector| E((ROS 2 Kinematic Engine));
-    E -->|Motor Execution| F{Kinova Robotic Arm};
-    F -.->|Status Updates| E;
-    E -.->|/chatter Topic| D;
+    B -->|HTTP POST & WebSockets| C[Linux: FastAPI Server];
+    C -->|Kortex API Commands| D((Kinova Robotic Arm));
+    D -.->|Real-time Telemetry| C;
 ```
 
-### Lane 1: Inbound Fast-Track (HTTP POST)
-Web UI joystick movements are fired as guaranteed HTTP `fetch()` requests directly to a dedicated lightweight Python Flask node (`server.py`) sitting natively on the Linux machine. This completely negates ROS 2 DDS discovery bugs and ensures zero commands are lost.
+### Lane 1: Inbound Control
+Web UI joystick movements are fired as guaranteed HTTP requests directly to the FastAPI backend (`main.py`). This completely negates ROS 2 DDS discovery bugs and ensures high-speed, direct hardware control.
 
-### Lane 2: Outbound Diagnostics (WebSockets)
-The React app simultaneously sustains a standard `roslibjs` proxy connection to the `rosbridge_server` strictly to digest returning network streams without bogging down the HTTP tunnel.
+### Lane 2: Outbound Diagnostics
+The React app simultaneously connects to the FastAPI WebSocket endpoints to subscribe to real-time motor torque and force data telemetry for precise object manipulation.
 
 ---
 
 ## 🚀 Setup & Deployment
 
-### Part 1: Linux Robot Environment Setup
-*The physical robot and the drivers live here.*
+### Part 1: Backend Setup
+*The high-performance API that controls the robot directly.*
 
-1. **Install Requirements:** Make sure your Ubuntu/Linux machine has standard Python web hosting capabilities installed.
+1. **Install Requirements:** Ensure your Python environment has the required dependencies.
+   *(Optional) Create and activate a virtual environment:*
    ```bash
-   sudo apt update
-   sudo apt install python3-flask python3-flask-cors
+   python -m venv venv
+   source venv/bin/activate
+   ```
+   *Install project dependencies (like FastAPI, Uvicorn, etc. Depending on your setup)*:
+   ```bash
+   pip install -r requirements.txt
    ```
 
-2. **Start the Dual Servers:** You will need two terminal windows open on your Linux machine.
-   * **Terminal 1:** Run `rosbridge_server`
-   * **Terminal 2:** Navigate to the `/backend` folder of this repo and run the Flask API.
-     ```bash
-     source /opt/ros/humble/setup.bash
-     python3 server.py
-     ```
+2. **Start the FastAPI Server:**
+   Navigate to the `/backend` folder and run the server using `uvicorn`.
+   ```bash
+   cd backend
+   uvicorn main:app --reload
+   ```
 
 ### Part 2: Mac / Web Dashboard Setup
 *The Operator Control Station.*
@@ -64,9 +65,7 @@ The React app simultaneously sustains a standard `roslibjs` proxy connection to 
    npm run dev
    ```
 2. **Connect the UI:** 
-   * When the React app opens in your browser, look for the **Connection Settings** card.
-   * Type in the Web Socket URL of your Linux Machine (Example: `ws://10.26.97.120:9090`).
-   * *Note: The React app will dynamically extract the IP address strictly from this WebSocket URL and use it to blast the backend HTTP joystick commands automatically.*
+   * When the React app opens in your browser, configure it to point to your new FastAPI backend (e.g. `127.0.0.1:8000` or the respective Linux machine IP).
 
 3. **Drive the Robot:**
-   Press and hold the blue Cartesian D-Pad axes. The system will mathematically stream vectors directly to `/twist_controller/commands` at 20-Hertz!
+   Leverage the updated UI controls to teleport precise kinematics natively over the high-speed Kortex API!
