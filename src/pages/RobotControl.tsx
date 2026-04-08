@@ -99,16 +99,10 @@ export default function RobotControl() {
         
         setActiveDirection(dirLabel);
         sendCommand(cmdType);
-        
-        if (jogIntervalRef.current) clearInterval(jogIntervalRef.current);
-        jogIntervalRef.current = setInterval(() => {
-            sendCommand(cmdType);
-        }, 150); // Fire macro endpoints repeatedly while held down
     };
 
     const stopJogging = () => {
         setActiveDirection(null);
-        if (jogIntervalRef.current) clearInterval(jogIntervalRef.current);
         if (isConnected) sendCommand('stop');
     };
 
