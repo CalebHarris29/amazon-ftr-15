@@ -51,14 +51,25 @@ def gripper_command(value: float):
     Open or close the gripper.
     value: 0.0 = fully open, 1.0 = fully closed
     """
+    print(f"[Robot] Instructing Gripper to physical position {value} (0=Open, 1=Closed)")
     gripper_command = Base_pb2.GripperCommand()
     gripper_command.mode = Base_pb2.GRIPPER_POSITION
 
-    finger = gripper_command.gripper.finger.add()
-    finger.finger_identifier = 1
-    finger.value = max(0.0, min(1.0, value))
+    # Add commands for both physical clamp actuator slots just in case
+    finger1 = gripper_command.gripper.finger.add()
+    finger1.finger_identifier = 1
+    finger1.value = max(0.0, min(1.0, value))
+    
+    # Gen3 Lite single-actuator often maps to Abstract finger identifier 2 in newer firmwares
+    finger2 = gripper_command.gripper.finger.add()
+    finger2.finger_identifier = 2
+    finger2.value = max(0.0, min(1.0, value))
 
-    robot.base.SendGripperCommand(gripper_command)
+    try:
+        robot.base.SendGripperCommand(gripper_command)
+        print("[Robot] Gripper hardware packet accepted.")
+    except Exception as e:
+        print(f"[Robot] Gripper failure traceback: {e}")
 
 
 # ── Sequence execution ────────────────────────────────────────────────────────
