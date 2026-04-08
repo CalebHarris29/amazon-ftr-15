@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Cpu, Wifi, WifiOff, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, ArrowUpFromLine, Octagon, Grab, RotateCcw, RotateCw, Undo2, Redo2 } from 'lucide-react';
+import { Cpu, Wifi, WifiOff, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, ArrowUpFromLine, Octagon, Grab } from 'lucide-react';
 import { toast } from 'sonner';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -223,146 +223,72 @@ export default function RobotControl() {
                             </Button>
                         </CardTitle>
                     </CardHeader>
-                    <CardContent className="flex flex-col py-6 border-b">
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                            
-                            {/* Linear Translation */}
-                            <div className="flex flex-col items-center gap-4">
-                                <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Linear Translation</Label>
-                                <div className="flex justify-center gap-4">
-                                    {/* Z-Axis */}
-                                    <div className="flex flex-col gap-2 bg-slate-100 dark:bg-slate-800 px-3 py-4 rounded-3xl items-center border shadow-inner">
-                                        <Button 
-                                            variant={activeDirection === '+Z' ? 'default' : 'outline'}
-                                            className={`w-14 h-14 rounded-full shadow-sm active:scale-95 transition-all ${activeDirection === '+Z' ? 'bg-blue-600' : ''}`}
-                                            onMouseDown={() => startJogging('+Z', 'move_up')}
-                                            onMouseUp={stopJogging} onMouseLeave={stopJogging}
-                                        >
-                                            <ArrowUp className="w-6 h-6" />
-                                        </Button>
-                                        <div className="h-4 text-[9px] font-bold text-slate-400 rotate-90 tracking-widest my-2">Z-AXIS</div>
-                                        <Button 
-                                            variant={activeDirection === '-Z' ? 'default' : 'outline'}
-                                            className={`w-14 h-14 rounded-full shadow-sm active:scale-95 transition-all ${activeDirection === '-Z' ? 'bg-blue-600' : ''}`}
-                                            onMouseDown={() => startJogging('-Z', 'move_down')}
-                                            onMouseUp={stopJogging} onMouseLeave={stopJogging}
-                                        >
-                                            <ArrowDown className="w-6 h-6" />
-                                        </Button>
-                                    </div>
-
-                                    {/* X/Y Controls */}
-                                    <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-[2.5rem] border flex flex-col items-center justify-center shadow-inner">
-                                        <div className="grid grid-cols-3 gap-2">
-                                            <div />
-                                            <Button 
-                                                variant={activeDirection === '+X' ? 'default' : 'outline'}
-                                                className={`w-14 h-14 rounded-xl shadow-sm active:scale-95 transition-all ${activeDirection === '+X' ? 'bg-blue-600' : ''}`}
-                                                onMouseDown={() => startJogging('+X', 'move_forward')}
-                                                onMouseUp={stopJogging} onMouseLeave={stopJogging}
-                                            >
-                                                <ArrowUp className="w-6 h-6" />
-                                            </Button>
-                                            <div />
-                                            <Button 
-                                                variant={activeDirection === '+Y' ? 'default' : 'outline'}
-                                                className={`w-14 h-14 rounded-xl shadow-sm active:scale-95 transition-all ${activeDirection === '+Y' ? 'bg-blue-600' : ''}`}
-                                                onMouseDown={() => startJogging('+Y', 'move_left')}
-                                                onMouseUp={stopJogging} onMouseLeave={stopJogging}
-                                            >
-                                                <ArrowLeft className="w-6 h-6" />
-                                            </Button>
-                                            <div className="w-14 h-14 flex items-center justify-center text-[10px] font-bold text-slate-400">X/Y</div>
-                                            <Button 
-                                                variant={activeDirection === '-Y' ? 'default' : 'outline'}
-                                                className={`w-14 h-14 rounded-xl shadow-sm active:scale-95 transition-all ${activeDirection === '-Y' ? 'bg-blue-600' : ''}`}
-                                                onMouseDown={() => startJogging('-Y', 'move_right')}
-                                                onMouseUp={stopJogging} onMouseLeave={stopJogging}
-                                            >
-                                                <ArrowRight className="w-6 h-6" />
-                                            </Button>
-                                            <div />
-                                            <Button 
-                                                variant={activeDirection === '-X' ? 'default' : 'outline'}
-                                                className={`w-14 h-14 rounded-xl shadow-sm active:scale-95 transition-all ${activeDirection === '-X' ? 'bg-blue-600' : ''}`}
-                                                onMouseDown={() => startJogging('-X', 'move_backward')}
-                                                onMouseUp={stopJogging} onMouseLeave={stopJogging}
-                                            >
-                                                <ArrowDown className="w-6 h-6" />
-                                            </Button>
-                                            <div />
-                                        </div>
-                                    </div>
-                                </div>
+                    <CardContent className="flex flex-col gap-6 py-6 border-b">
+                        
+                        <div className="flex justify-center gap-6">
+                            {/* Z-Axis Controls */}
+                            <div className="flex flex-col gap-2 bg-slate-100 dark:bg-slate-800 px-3 py-4 rounded-3xl items-center border shadow-inner">
+                                <Button 
+                                    variant={activeDirection === '+Z' ? 'default' : 'outline'}
+                                    className={`w-14 h-14 rounded-full shadow-sm active:scale-95 ${activeDirection === '+Z' ? 'bg-blue-600' : ''}`}
+                                    onMouseDown={() => startJogging('+Z', 'move_up')}
+                                    onMouseUp={stopJogging} onMouseLeave={stopJogging}
+                                >
+                                    <ArrowUp className="w-6 h-6" />
+                                </Button>
+                                <div className="h-4 text-[9px] font-bold text-slate-400 rotate-90 tracking-widest">Z-AXIS</div>
+                                <Button 
+                                    variant={activeDirection === '-Z' ? 'default' : 'outline'}
+                                    className={`w-14 h-14 rounded-full shadow-sm active:scale-95 ${activeDirection === '-Z' ? 'bg-blue-600' : ''}`}
+                                    onMouseDown={() => startJogging('-Z', 'move_down')}
+                                    onMouseUp={stopJogging} onMouseLeave={stopJogging}
+                                >
+                                    <ArrowDown className="w-6 h-6" />
+                                </Button>
                             </div>
-                            
-                            {/* Angular Rotation */}
-                            <div className="flex flex-col items-center gap-4">
-                                <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Angular Rotation</Label>
-                                <div className="flex justify-center gap-4">
-                                    {/* Yaw/Pitch Controls */}
-                                    <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-[2.5rem] border flex flex-col items-center justify-center shadow-inner">
-                                        <div className="grid grid-cols-3 gap-2">
-                                            <div />
-                                            <Button 
-                                                variant={activeDirection === '+Pitch' ? 'default' : 'outline'}
-                                                className={`w-14 h-14 rounded-xl shadow-sm active:scale-95 transition-all ${activeDirection === '+Pitch' ? 'bg-purple-600' : ''}`}
-                                                onMouseDown={() => startJogging('+Pitch', 'tilt_up')}
-                                                onMouseUp={stopJogging} onMouseLeave={stopJogging}
-                                            >
-                                                <ArrowUp className="w-6 h-6" />
-                                            </Button>
-                                            <div />
-                                            <Button 
-                                                variant={activeDirection === '+Yaw' ? 'default' : 'outline'}
-                                                className={`w-14 h-14 rounded-xl shadow-sm active:scale-95 transition-all ${activeDirection === '+Yaw' ? 'bg-purple-600' : ''}`}
-                                                onMouseDown={() => startJogging('+Yaw', 'rotate_left')}
-                                                onMouseUp={stopJogging} onMouseLeave={stopJogging}
-                                            >
-                                                <RotateCcw className="w-6 h-6" />
-                                            </Button>
-                                            <div className="w-14 h-14 flex items-center justify-center text-[9px] font-bold text-slate-400 text-center leading-tight">YAW PITCH</div>
-                                            <Button 
-                                                variant={activeDirection === '-Yaw' ? 'default' : 'outline'}
-                                                className={`w-14 h-14 rounded-xl shadow-sm active:scale-95 transition-all ${activeDirection === '-Yaw' ? 'bg-purple-600' : ''}`}
-                                                onMouseDown={() => startJogging('-Yaw', 'rotate_right')}
-                                                onMouseUp={stopJogging} onMouseLeave={stopJogging}
-                                            >
-                                                <RotateCw className="w-6 h-6" />
-                                            </Button>
-                                            <div />
-                                            <Button 
-                                                variant={activeDirection === '-Pitch' ? 'default' : 'outline'}
-                                                className={`w-14 h-14 rounded-xl shadow-sm active:scale-95 transition-all ${activeDirection === '-Pitch' ? 'bg-purple-600' : ''}`}
-                                                onMouseDown={() => startJogging('-Pitch', 'tilt_down')}
-                                                onMouseUp={stopJogging} onMouseLeave={stopJogging}
-                                            >
-                                                <ArrowDown className="w-6 h-6" />
-                                            </Button>
-                                            <div />
-                                        </div>
+
+                            {/* X/Y Controls */}
+                            <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-[2.5rem] border flex flex-col items-center justify-center shadow-inner">
+                                <div className="grid grid-cols-3 gap-2">
+                                    <div />
+                                    <Button 
+                                        variant={activeDirection === '+X' ? 'default' : 'outline'}
+                                        className={`w-14 h-14 rounded-xl shadow-sm active:scale-95 ${activeDirection === '+X' ? 'bg-blue-600' : ''}`}
+                                        onMouseDown={() => startJogging('+X', 'move_forward')}
+                                        onMouseUp={stopJogging} onMouseLeave={stopJogging}
+                                    >
+                                        <ArrowUp className="w-6 h-6" />
+                                    </Button>
+                                    <div />
+                                    <Button 
+                                        variant={activeDirection === '+Tilt' ? 'default' : 'outline'}
+                                        className={`w-14 h-14 rounded-xl shadow-sm active:scale-95 ${activeDirection === '+Tilt' ? 'bg-blue-600' : ''}`}
+                                        onMouseDown={() => startJogging('+Tilt', 'tilt_up')}
+                                        onMouseUp={stopJogging} onMouseLeave={stopJogging}
+                                    >
+                                        <ArrowLeft className="w-6 h-6" />
+                                    </Button>
+                                    <div className="w-14 h-14 flex items-center justify-center">
+                                        <div className="w-3 h-3 rounded-full bg-slate-300 dark:bg-slate-600"></div>
                                     </div>
-                                    
-                                    {/* Roll Axis */}
-                                    <div className="flex flex-col gap-2 bg-slate-100 dark:bg-slate-800 px-3 py-4 rounded-3xl items-center border shadow-inner">
-                                        <Button 
-                                            variant={activeDirection === '+Roll' ? 'default' : 'outline'}
-                                            className={`w-14 h-14 rounded-full shadow-sm active:scale-95 transition-all ${activeDirection === '+Roll' ? 'bg-purple-600' : ''}`}
-                                            onMouseDown={() => startJogging('+Roll', 'roll_left')}
-                                            onMouseUp={stopJogging} onMouseLeave={stopJogging}
-                                        >
-                                            <Undo2 className="w-6 h-6" />
-                                        </Button>
-                                        <div className="h-4 text-[9px] font-bold text-slate-400 rotate-90 tracking-widest my-2 text-center w-14">ROLL</div>
-                                        <Button 
-                                            variant={activeDirection === '-Roll' ? 'default' : 'outline'}
-                                            className={`w-14 h-14 rounded-full shadow-sm active:scale-95 transition-all ${activeDirection === '-Roll' ? 'bg-purple-600' : ''}`}
-                                            onMouseDown={() => startJogging('-Roll', 'roll_right')}
-                                            onMouseUp={stopJogging} onMouseLeave={stopJogging}
-                                        >
-                                            <Redo2 className="w-6 h-6" />
-                                        </Button>
-                                    </div>
+                                    <Button 
+                                        variant={activeDirection === '-Tilt' ? 'default' : 'outline'}
+                                        className={`w-14 h-14 rounded-xl shadow-sm active:scale-95 ${activeDirection === '-Tilt' ? 'bg-blue-600' : ''}`}
+                                        onMouseDown={() => startJogging('-Tilt', 'tilt_down')}
+                                        onMouseUp={stopJogging} onMouseLeave={stopJogging}
+                                    >
+                                        <ArrowRight className="w-6 h-6" />
+                                    </Button>
+                                    <div />
+                                    <Button 
+                                        variant={activeDirection === '-X' ? 'default' : 'outline'}
+                                        className={`w-14 h-14 rounded-xl shadow-sm active:scale-95 ${activeDirection === '-X' ? 'bg-blue-600' : ''}`}
+                                        onMouseDown={() => startJogging('-X', 'move_backward')}
+                                        onMouseUp={stopJogging} onMouseLeave={stopJogging}
+                                    >
+                                        <ArrowDown className="w-6 h-6" />
+                                    </Button>
+                                    <div />
                                 </div>
                             </div>
                         </div>
