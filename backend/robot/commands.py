@@ -15,7 +15,6 @@ def send_twist(linear_x=0.0, linear_y=0.0, linear_z=0.0,
     """Send a Cartesian velocity command. Call with all zeros (or stop()) to halt."""
     command = Base_pb2.TwistCommand()
     command.reference_frame = Base_pb2.CARTESIAN_REFERENCE_FRAME_MIXED
-    command.duration = 0  # 0 = run until next command
 
     command.twist.linear_x  = linear_x
     command.twist.linear_y  = linear_y
