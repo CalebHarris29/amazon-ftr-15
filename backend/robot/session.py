@@ -70,6 +70,12 @@ class RobotSession:
             self.base = BaseClient(self.router)
             self.base_cyclic = BaseCyclicClient(self.router)
 
+            # --- HARDWARE OVERRIDE: CLEAR E-STOPS ---
+            try:
+                self.base.ClearFaults()
+            except Exception as e:
+                print(f"[Robot] Attempted clear fault override: {e}")
+
             # Twist commands require high-level (single-level) servoing mode
             servoing_mode = Base_pb2.ServoingModeInformation()
             servoing_mode.servoing_mode = Base_pb2.SINGLE_LEVEL_SERVOING

@@ -84,4 +84,7 @@ async def send_command(body: CommandRequest):
     except HTTPException:
         raise
     except Exception as e:
+        print(f"[ERROR] Kortex Twist Command Failed: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
