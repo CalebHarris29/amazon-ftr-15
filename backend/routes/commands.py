@@ -13,6 +13,8 @@ router = APIRouter()
 class CommandType(str, Enum):
     MOVE_FORWARD  = "move_forward"
     MOVE_BACKWARD = "move_backward"
+    MOVE_LEFT     = "move_left"
+    MOVE_RIGHT    = "move_right"
     MOVE_UP       = "move_up"
     MOVE_DOWN     = "move_down"
     ROTATE_LEFT   = "rotate_left"
@@ -36,6 +38,8 @@ class CommandRequest(BaseModel):
 _TWIST_MAP = {
     CommandType.MOVE_FORWARD:  dict(linear_x=1.0),
     CommandType.MOVE_BACKWARD: dict(linear_x=-1.0),
+    CommandType.MOVE_LEFT:     dict(linear_y=1.0),
+    CommandType.MOVE_RIGHT:    dict(linear_y=-1.0),
     CommandType.MOVE_UP:       dict(linear_z=1.0),
     CommandType.MOVE_DOWN:     dict(linear_z=-1.0),
     CommandType.ROTATE_LEFT:   dict(angular_z=1.0),
