@@ -1,312 +1,317 @@
 import React, { useState, useEffect, useRef } from 'react';
-import * as ROSLIB from 'roslib';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Cpu, Wifi, WifiOff, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, ArrowUpFromLine, ArrowDownToLine, Octagon } from 'lucide-react';
+import { Cpu, Wifi, WifiOff, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, ArrowUpFromLine, Octagon, Grab } from 'lucide-react';
 import { toast } from 'sonner';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+
+interface TelemetryData {
+    status: string;
+    battery: number;
+    connection: string;
+    currentTask: string;
+    joints: number[];
+    torques: number[];
+}
 
 export default function RobotControl() {
-    const [url, setUrl] = useState('ws://10.26.97.120:9090');
+    const [ipAddress, setIpAddress] = useState('10.26.96.78');
     const [isConnected, setIsConnected] = useState(false);
-    const [chatterMessages, setChatterMessages] = useState<string[]>([]);
+    const [telemetry, setTelemetry] = useState<TelemetryData | null>(null);
+    const [torqueHistory, setTorqueHistory] = useState<any[]>([]);
     const [activeDirection, setActiveDirection] = useState<string | null>(null);
     
-    const rosRef = useRef<ROSLIB.Ros | null>(null);
-    const chatterRef = useRef<ROSLIB.Topic | null>(null);
-    const twistCommandRef = useRef<ROSLIB.Topic | null>(null);
+    const wsRef = useRef<WebSocket | null>(null);
     const jogIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
-        // Cleanup on unmount ensures robot stops if interface closes
         return () => {
             stopJogging();
-            if (rosRef.current) {
-                rosRef.current.close();
-            }
+            if (wsRef.current) wsRef.current.close();
         };
     }, []);
 
     const connect = () => {
-        if (rosRef.current) {
-            rosRef.current.close();
-        }
+        if (wsRef.current) wsRef.current.close();
 
         try {
-            const ros = new ROSLIB.Ros({ url });
+            const ws = new WebSocket(`ws://${ipAddress}:8000/ws`);
 
-            ros.on('connection', () => {
+            ws.onopen = () => {
                 setIsConnected(true);
-                toast.success('Connected to ROS websocket server.');
+                toast.success('Connected natively to Kortex FastAPI server.');
+            };
 
-                // Setup Cartesian Twist publisher
-                twistCommandRef.current = new ROSLIB.Topic({
-                    ros: ros,
-                    name: '/twist_controller/commands',
-                    messageType: 'geometry_msgs/TwistStamped'
-                });
-                twistCommandRef.current.advertise();
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                setTelemetry(data);
+                
+                // Track historical torque for the Recharts graph (Total avg to identify physical struggle/weight)
+                if (data.torques && data.torques.length > 0) {
+                    const avgTorque = data.torques.reduce((a: number,b: number) => a+Math.abs(b), 0) / data.torques.length;
+                    setTorqueHistory(prev => {
+                        const newHist = [...prev, { time: new Date().toLocaleTimeString().split(' ')[0], torque: avgTorque }];
+                        return newHist.slice(-25); // Keep rolling window of last 25 ticks
+                    });
+                }
+            };
 
-                // Setup chatter subscriber for diagnostics
-                chatterRef.current = new ROSLIB.Topic({
-                    ros: ros,
-                    name: '/chatter',
-                    messageType: 'std_msgs/String' // or std_msgs/msg/String depending on your rosbridge
-                });
+            ws.onerror = (error) => {
+                console.error('WebSocket Error:', error);
+                toast.error('Failed to connect to robot stream.');
+            };
 
-                chatterRef.current.subscribe((message: any) => {
-                    setChatterMessages((prev) => [...prev.slice(-9), message.data]);
-                });
-            });
-
-            ros.on('error', (error) => {
-                console.error('ROS Connection Error:', error);
-                toast.error('Failed to connect to bridge.');
+            ws.onclose = () => {
                 setIsConnected(false);
-            });
-
-            ros.on('close', () => {
-                setIsConnected(false);
+                setTelemetry(null);
                 stopJogging();
-            });
+            };
 
-            rosRef.current = ros;
+            wsRef.current = ws;
         } catch (e) {
-            console.error('Connection instantiation failed', e);
-            toast.error('Failed to parse URL or initialize connection.');
+            toast.error('Invalid URL or Connection failed.');
         }
     };
 
     const disconnect = () => {
-        if (rosRef.current) {
-            stopJogging();
-            if (chatterRef.current) {
-                chatterRef.current.unsubscribe();
-            }
-            rosRef.current.close();
-            rosRef.current = null;
+        if (wsRef.current) {
+            wsRef.current.close();
+            wsRef.current = null;
         }
     };
 
-    const publishTwistHTTP = async (lx: number, ly: number, lz: number) => {
+    const sendCommand = async (type: string) => {
         try {
-            // Dynamically strip the IP from 'ws://10.26.97.120:9090' -> '10.26.97.120'
-            const ipAddress = url.replace('ws://', '').split(':')[0];
-            const endpoint = `http://${ipAddress}:5000/twist?lx=${lx}&ly=${ly}&lz=${lz}&ax=0&ay=0&az=0`;
-            
-            await fetch(endpoint, { method: 'POST', mode: 'cors' });
+            await fetch(`http://${ipAddress}:8000/api/command`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type, speed: 0.1 }) // Faster base speed for manual UI
+            });
         } catch (e) {
-            console.error('Failed HTTP Injection:', e);
+            console.error('Command failed:', e);
         }
     };
 
-    const startJogging = (dir: string, lx: number, ly: number, lz: number) => {
-        if (!isConnected) {
-            toast.warning('Not connected to robot.');
-            return;
-        }
+    const startJogging = (dirLabel: string, cmdType: string) => {
+        if (!isConnected) return toast.warning('Not connected to robot.');
         
-        setActiveDirection(dir);
-        
-        publishTwistHTTP(lx, ly, lz);
+        setActiveDirection(dirLabel);
+        sendCommand(cmdType);
         
         if (jogIntervalRef.current) clearInterval(jogIntervalRef.current);
-        
         jogIntervalRef.current = setInterval(() => {
-            publishTwistHTTP(lx, ly, lz);
-        }, 50);
+            sendCommand(cmdType);
+        }, 150); // Fire macro endpoints repeatedly while held down
     };
 
     const stopJogging = () => {
         setActiveDirection(null);
-        if (jogIntervalRef.current) {
-            clearInterval(jogIntervalRef.current);
-            jogIntervalRef.current = null;
-        }
-        publishTwistHTTP(0, 0, 0);
-        setTimeout(() => publishTwistHTTP(0, 0, 0), 50);
+        if (jogIntervalRef.current) clearInterval(jogIntervalRef.current);
+        if (isConnected) sendCommand('stop');
     };
 
+    const triggerGripper = (action: 'gripper_open' | 'gripper_close') => {
+        if (!isConnected) return toast.warning('Not connected to robot.');
+        sendCommand(action);
+    }
+
     return (
-        <div className="container mx-auto p-6 max-w-5xl">
+        <div className="container mx-auto p-6 max-w-6xl">
             <div className="flex items-center gap-3 mb-8">
                 <div className="p-3 bg-primary/10 rounded-xl">
                     <Cpu className="w-8 h-8 text-primary" />
                 </div>
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Robot Control Operator</h1>
-                    <p className="text-muted-foreground">Teleoperate physical ROS arms via High-Speed WebSockets.</p>
+                    <h1 className="text-3xl font-bold tracking-tight">Kortex Insight Dashboard</h1>
+                    <p className="text-muted-foreground">Native FastAPI Telemetry & Control Interface.</p>
                 </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
                 
                 {/* Connection Panel */}
-                <Card className="md:col-span-12">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <Wifi className="w-5 h-5" /> Connection Settings
+                <Card className="md:col-span-12 shadow-sm border-slate-200 dark:border-slate-800">
+                    <CardHeader className="py-4">
+                        <CardTitle className="flex items-center gap-2 text-lg">
+                            <Wifi className="w-5 h-5 text-blue-500" /> Connection Node
                         </CardTitle>
-                        <CardDescription>Connect to the rosbridge websocket server on your Linux machine.</CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="flex items-end gap-4 max-w-md">
-                            <div className="space-y-2 flex-grow">
-                                <Label htmlFor="ws-url">WebSocket URL</Label>
-                                <Input
-                                    id="ws-url"
-                                    value={url}
-                                    onChange={(e) => setUrl(e.target.value)}
-                                    placeholder="ws://10.26.97.120:9090"
-                                    disabled={isConnected}
-                                    className="font-mono"
-                                />
-                            </div>
-                            <div className="pb-[2px]">
-                                {isConnected ? (
-                                    <Button variant="destructive" onClick={disconnect} className="gap-2 w-32">
-                                        <WifiOff className="w-4 h-4" /> Disconnect
-                                    </Button>
-                                ) : (
-                                    <Button onClick={connect} className="gap-2 w-32 bg-green-600 hover:bg-green-700">
-                                        <Wifi className="w-4 h-4" /> Connect
-                                    </Button>
-                                )}
-                            </div>
+                    <CardContent className="flex items-end gap-4">
+                        <div className="space-y-2 flex-grow max-w-sm">
+                            <Label>FastAPI Server IP</Label>
+                            <Input
+                                value={ipAddress}
+                                onChange={(e) => setIpAddress(e.target.value)}
+                                placeholder="10.26.96.78"
+                                disabled={isConnected}
+                                className="font-mono bg-slate-50 dark:bg-slate-900"
+                            />
                         </div>
+                        {isConnected ? (
+                            <Button variant="destructive" onClick={disconnect} className="gap-2 w-32 shadow-sm">
+                                <WifiOff className="w-4 h-4" /> Disconnect
+                            </Button>
+                        ) : (
+                            <Button onClick={connect} className="gap-2 w-32 bg-blue-600 hover:bg-blue-700 shadow-sm">
+                                <Wifi className="w-4 h-4" /> Connect
+                            </Button>
+                        )}
+                        {telemetry && (
+                             <div className="ml-auto text-sm bg-slate-100 dark:bg-slate-800 px-4 py-2 rounded-lg border flex items-center gap-3">
+                                 <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div> {telemetry.status.toUpperCase()}</span>
+                                 <span className="text-slate-400">|</span>
+                                 <span>TASK: <span className="font-mono font-bold">{telemetry.currentTask}</span></span>
+                             </div>
+                        )}
                     </CardContent>
                 </Card>
 
-                {/* Cartesian D-Pad Panel */}
-                <Card className={`md:col-span-7 border-blue-500/20 shadow-blue-500/5 ${!isConnected ? 'opacity-50 pointer-events-none' : ''}`}>
-                    <CardHeader className="bg-slate-50 dark:bg-slate-900 border-b">
-                        <CardTitle className="flex items-center justify-between">
+                {/* Left Column: Data & Insights (7 columns) */}
+                <div className="md:col-span-7 flex flex-col gap-6">
+                    <Card className={`border-emerald-500/20 shadow-emerald-500/5 ${!isConnected ? 'opacity-50 pointer-events-none' : ''}`}>
+                        <CardHeader className="bg-slate-50 dark:bg-slate-900 border-b py-4">
+                            <CardTitle className="flex items-center justify-between text-lg">
+                                <div className="flex items-center gap-2">
+                                    <Grab className="w-5 h-5 text-emerald-500" /> 
+                                    Real-Time Force/Torque Insights
+                                </div>
+                            </CardTitle>
+                            <CardDescription>Visualizing absolute motor effort. Grasping an object causes visible spikes.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="pt-6 h-72">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={torqueHistory}>
+                                    <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                                    <XAxis dataKey="time" tick={{fontSize: 10}} opacity={0.5} />
+                                    <YAxis label={{ value: 'Avg Torque (Nm)', angle: -90, position: 'insideLeft', style: { fontSize: 10, fill: '#94a3b8' } }} tick={{fontSize: 10}} opacity={0.5} width={40} />
+                                    <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                                    <Line type="monotone" dataKey="torque" stroke="#10b981" strokeWidth={3} dot={false} isAnimationActive={false} />
+                                </LineChart>
+                            </ResponsiveContainer>
+                        </CardContent>
+                    </Card>
+
+                    <Card className={`${!isConnected ? 'opacity-50 pointer-events-none' : ''} shadow-sm border-slate-200 dark:border-slate-800`}>
+                        <CardHeader className="py-4">
+                            <CardTitle className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Live Actuator Matrix</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="grid grid-cols-6 gap-2">
+                                {telemetry?.torques?.map((t, i) => (
+                                    <div key={i} className="bg-slate-100 dark:bg-slate-800 rounded-lg p-3 text-center border overflow-hidden">
+                                        <div className="text-[10px] text-slate-400 font-bold mb-1">MOTOR {i+1}</div>
+                                        <div className="font-mono text-sm font-semibold truncate">{Math.abs(t).toFixed(1)} Nm</div>
+                                    </div>
+                                ))}
+                                {!telemetry?.torques && Array(6).fill(0).map((_, i) => <div key={i} className="bg-slate-100 rounded-lg p-3 text-center opacity-50 dark:bg-slate-800"><div className="h-4"></div></div>)}
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                {/* Right Column: Controls (5 columns) */}
+                <Card className={`md:col-span-5 border-blue-500/20 shadow-blue-500/5 ${!isConnected ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <CardHeader className="bg-slate-50 dark:bg-slate-900 border-b py-4">
+                        <CardTitle className="flex items-center justify-between text-lg">
                             <div className="flex items-center gap-2">
                                 <ArrowUpFromLine className="w-5 h-5 text-blue-500" /> 
-                                Cartesian Joystick
+                                Kortex Teleoperation
                             </div>
-                            {/* Emergency Stop */}
                             <Button 
                                 variant="destructive" 
                                 size="sm" 
                                 onClick={stopJogging}
-                                className="uppercase font-bold tracking-widest text-xs"
+                                className="uppercase font-bold tracking-widest text-[10px] h-7"
                             >
-                                <Octagon className="w-4 h-4 mr-2" />
-                                Halt
+                                <Octagon className="w-3 h-3 mr-1" /> Halt
                             </Button>
                         </CardTitle>
-                        <CardDescription>Press and hold buttons to continuously stream velocity physics to the arm end-effector.</CardDescription>
                     </CardHeader>
-                    <CardContent className="flex justify-center py-8">
+                    <CardContent className="flex flex-col gap-6 py-6 border-b">
                         
-                        <div className="flex gap-12 items-center">
-                            {/* Z-Axis Controls (Vertical Column) */}
-                            <div className="flex flex-col gap-2 bg-slate-100 dark:bg-slate-800 p-4 rounded-3xl items-center border">
-                                <Label className="text-xs font-bold text-slate-500 uppercase pb-2">Z-Axis (Elevate)</Label>
+                        <div className="flex justify-center gap-6">
+                            {/* Z-Axis Controls */}
+                            <div className="flex flex-col gap-2 bg-slate-100 dark:bg-slate-800 px-3 py-4 rounded-3xl items-center border shadow-inner">
                                 <Button 
-                                    size="lg"
                                     variant={activeDirection === '+Z' ? 'default' : 'outline'}
-                                    className={`w-16 h-16 rounded-full shadow-md active:scale-95 ${activeDirection === '+Z' ? 'bg-blue-600' : ''}`}
-                                    onMouseDown={() => startJogging('+Z', 0, 0, 0.1)}
-                                    onMouseUp={stopJogging}
-                                    onMouseLeave={stopJogging}
+                                    className={`w-14 h-14 rounded-full shadow-sm active:scale-95 ${activeDirection === '+Z' ? 'bg-blue-600' : ''}`}
+                                    onMouseDown={() => startJogging('+Z', 'move_up')}
+                                    onMouseUp={stopJogging} onMouseLeave={stopJogging}
                                 >
-                                    <ArrowUp className="w-8 h-8" />
+                                    <ArrowUp className="w-6 h-6" />
                                 </Button>
-                                <div className="h-4"></div>
+                                <div className="h-4 text-[9px] font-bold text-slate-400 rotate-90 tracking-widest">Z-AXIS</div>
                                 <Button 
-                                    size="lg"
                                     variant={activeDirection === '-Z' ? 'default' : 'outline'}
-                                    className={`w-16 h-16 rounded-full shadow-md active:scale-95 ${activeDirection === '-Z' ? 'bg-blue-600' : ''}`}
-                                    onMouseDown={() => startJogging('-Z', 0, 0, -0.1)}
-                                    onMouseUp={stopJogging}
-                                    onMouseLeave={stopJogging}
+                                    className={`w-14 h-14 rounded-full shadow-sm active:scale-95 ${activeDirection === '-Z' ? 'bg-blue-600' : ''}`}
+                                    onMouseDown={() => startJogging('-Z', 'move_down')}
+                                    onMouseUp={stopJogging} onMouseLeave={stopJogging}
                                 >
-                                    <ArrowDown className="w-8 h-8" />
+                                    <ArrowDown className="w-6 h-6" />
                                 </Button>
                             </div>
 
-                            {/* X/Y Axis Controls (D-Pad Grid) */}
-                            <div className="bg-slate-100 dark:bg-slate-800 p-6 rounded-[3rem] border flex flex-col items-center relative shadow-inner">
-                                <Label className="text-xs font-bold text-slate-500 uppercase absolute top-4">X/Y-Axis (Plane)</Label>
-                                
-                                <div className="grid grid-cols-3 gap-2 mt-6">
+                            {/* X/Y Controls */}
+                            <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-[2.5rem] border flex flex-col items-center justify-center shadow-inner">
+                                <div className="grid grid-cols-3 gap-2">
                                     <div />
                                     <Button 
-                                        size="lg"
                                         variant={activeDirection === '+X' ? 'default' : 'outline'}
-                                        className={`w-16 h-16 rounded-xl shadow-md active:scale-95 ${activeDirection === '+X' ? 'bg-blue-600' : ''}`}
-                                        onMouseDown={() => startJogging('+X', 0.1, 0, 0)}
-                                        onMouseUp={stopJogging}
-                                        onMouseLeave={stopJogging}
+                                        className={`w-14 h-14 rounded-xl shadow-sm active:scale-95 ${activeDirection === '+X' ? 'bg-blue-600' : ''}`}
+                                        onMouseDown={() => startJogging('+X', 'move_forward')}
+                                        onMouseUp={stopJogging} onMouseLeave={stopJogging}
                                     >
-                                        <ArrowUp className="w-8 h-8" />
+                                        <ArrowUp className="w-6 h-6" />
                                     </Button>
                                     <div />
-                                    
                                     <Button 
-                                        size="lg"
-                                        variant={activeDirection === '+Y' ? 'default' : 'outline'}
-                                        className={`w-16 h-16 rounded-xl shadow-md active:scale-95 ${activeDirection === '+Y' ? 'bg-blue-600' : ''}`}
-                                        onMouseDown={() => startJogging('+Y', 0, 0.1, 0)}
-                                        onMouseUp={stopJogging}
-                                        onMouseLeave={stopJogging}
+                                        variant={activeDirection === '+Tilt' ? 'default' : 'outline'}
+                                        className={`w-14 h-14 rounded-xl shadow-sm active:scale-95 ${activeDirection === '+Tilt' ? 'bg-blue-600' : ''}`}
+                                        onMouseDown={() => startJogging('+Tilt', 'tilt_up')}
+                                        onMouseUp={stopJogging} onMouseLeave={stopJogging}
                                     >
-                                        <ArrowLeft className="w-8 h-8" />
+                                        <ArrowLeft className="w-6 h-6" />
                                     </Button>
-                                    <div className="w-16 h-16 flex items-center justify-center">
-                                        <div className="w-4 h-4 rounded-full bg-slate-300 dark:bg-slate-600"></div>
+                                    <div className="w-14 h-14 flex items-center justify-center">
+                                        <div className="w-3 h-3 rounded-full bg-slate-300 dark:bg-slate-600"></div>
                                     </div>
                                     <Button 
-                                        size="lg"
-                                        variant={activeDirection === '-Y' ? 'default' : 'outline'}
-                                        className={`w-16 h-16 rounded-xl shadow-md active:scale-95 ${activeDirection === '-Y' ? 'bg-blue-600' : ''}`}
-                                        onMouseDown={() => startJogging('-Y', 0, -0.1, 0)}
-                                        onMouseUp={stopJogging}
-                                        onMouseLeave={stopJogging}
+                                        variant={activeDirection === '-Tilt' ? 'default' : 'outline'}
+                                        className={`w-14 h-14 rounded-xl shadow-sm active:scale-95 ${activeDirection === '-Tilt' ? 'bg-blue-600' : ''}`}
+                                        onMouseDown={() => startJogging('-Tilt', 'tilt_down')}
+                                        onMouseUp={stopJogging} onMouseLeave={stopJogging}
                                     >
-                                        <ArrowRight className="w-8 h-8" />
+                                        <ArrowRight className="w-6 h-6" />
                                     </Button>
-                                    
                                     <div />
                                     <Button 
-                                        size="lg"
                                         variant={activeDirection === '-X' ? 'default' : 'outline'}
-                                        className={`w-16 h-16 rounded-xl shadow-md active:scale-95 ${activeDirection === '-X' ? 'bg-blue-600' : ''}`}
-                                        onMouseDown={() => startJogging('-X', -0.1, 0, 0)}
-                                        onMouseUp={stopJogging}
-                                        onMouseLeave={stopJogging}
+                                        className={`w-14 h-14 rounded-xl shadow-sm active:scale-95 ${activeDirection === '-X' ? 'bg-blue-600' : ''}`}
+                                        onMouseDown={() => startJogging('-X', 'move_backward')}
+                                        onMouseUp={stopJogging} onMouseLeave={stopJogging}
                                     >
-                                        <ArrowDown className="w-8 h-8" />
+                                        <ArrowDown className="w-6 h-6" />
                                     </Button>
                                     <div />
                                 </div>
                             </div>
                         </div>
-
                     </CardContent>
-                </Card>
 
-                {/* Diagnostics / Chatter Panel */}
-                <Card className={`md:col-span-5 ${!isConnected ? 'opacity-50 pointer-events-none' : ''}`}>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-sm">
-                            <Wifi className="w-4 h-4" /> Diagnostics Stream
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="bg-slate-950 text-emerald-400 p-4 rounded-lg h-60 overflow-y-auto font-mono text-sm leading-relaxed shadow-inner border border-slate-800">
-                            {chatterMessages.length === 0 ? (
-                                <p className="text-slate-600 italic">No diagnostics received from /chatter...</p>
-                            ) : (
-                                chatterMessages.map((msg, idx) => (
-                                    <p key={idx} className="opacity-90">{'>'} {msg}</p>
-                                ))
-                            )}
+                    {/* Gripper Override */}
+                    <div className="p-6 bg-white dark:bg-slate-950 rounded-b-xl text-center">
+                        <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 block">Gripper Actuation Override</Label>
+                        <div className="flex justify-center gap-3">
+                            <Button variant="outline" className="w-full bg-white hover:bg-slate-50 dark:bg-slate-900 border-slate-300" onClick={() => triggerGripper('gripper_open')}>
+                                Release Clamp
+                            </Button>
+                            <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => triggerGripper('gripper_close')}>
+                                Close Clamp
+                            </Button>
                         </div>
-                    </CardContent>
+                    </div>
                 </Card>
                 
             </div>
