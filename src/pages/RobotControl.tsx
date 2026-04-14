@@ -84,13 +84,22 @@ export default function RobotControl() {
 
     const sendCommand = async (type: string) => {
         try {
-            await fetch(`http://${ipAddress}:8000/api/command`, {
+            const res = await fetch(`http://${ipAddress}:8000/api/command`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ type, speed: 0.1 }) // Faster base speed for manual UI
             });
+            if (!res.ok) {
+                let detail = res.statusText;
+                try {
+                    const errBody = await res.json();
+                    if (typeof errBody?.detail === 'string') detail = errBody.detail;
+                } catch { /* ignore */ }
+                toast.error(`Command failed (${res.status}): ${detail}`);
+            }
         } catch (e) {
             console.error('Command failed:', e);
+            toast.error('Command failed: network error');
         }
     };
 

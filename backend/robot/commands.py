@@ -3,9 +3,15 @@ Low-level helpers that translate frontend command types into Kortex API calls.
 All functions are synchronous — run them in a thread pool from async routes.
 """
 
+import os
+
 from kortex_api.autogen.messages import Base_pb2
 
 from robot.session import robot
+
+# Kinova example 106-Gripper_command uses a single finger with identifier 1.
+# Gen3 Lite / some grippers may need 0 or 2 — set GRIPPER_FINGER_ID if needed.
+GRIPPER_FINGER_ID = int(os.getenv("GRIPPER_FINGER_ID", "1"))
 
 
 # ── Direct control ────────────────────────────────────────────────────────────
@@ -48,28 +54,22 @@ def go_home():
 
 def gripper_command(value: float):
     """
-    Open or close the gripper.
+    Open or close the gripper (high-level position mode).
     value: 0.0 = fully open, 1.0 = fully closed
     """
-    print(f"[Robot] Instructing Gripper to physical position {value} (0=Open, 1=Closed)")
-    gripper_command = Base_pb2.GripperCommand()
-    gripper_command.mode = Base_pb2.GRIPPER_POSITION
+    value = max(0.0, min(1.0, value))
+    print(
+        f"[Robot] Gripper GRIPPER_POSITION finger_id={GRIPPER_FINGER_ID} value={value} "
+        "(set GRIPPER_FINGER_ID if this model uses another id)"
+    )
+    command = Base_pb2.GripperCommand()
+    command.mode = Base_pb2.GRIPPER_POSITION
+    finger = command.gripper.finger.add()
+    finger.finger_identifier = GRIPPER_FINGER_ID
+    finger.value = value
 
-    # Add commands for both physical clamp actuator slots just in case
-    finger1 = gripper_command.gripper.finger.add()
-    finger1.finger_identifier = 1
-    finger1.value = max(0.0, min(1.0, value))
-    
-    # Gen3 Lite single-actuator often maps to Abstract finger identifier 2 in newer firmwares
-    finger2 = gripper_command.gripper.finger.add()
-    finger2.finger_identifier = 2
-    finger2.value = max(0.0, min(1.0, value))
-
-    try:
-        robot.base.SendGripperCommand(gripper_command)
-        print("[Robot] Gripper hardware packet accepted.")
-    except Exception as e:
-        print(f"[Robot] Gripper failure traceback: {e}")
+    robot.base.SendGripperCommand(command)
+    print("[Robot] SendGripperCommand completed.")
 
 
 # ── Sequence execution ────────────────────────────────────────────────────────
