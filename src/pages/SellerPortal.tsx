@@ -1,213 +1,337 @@
-import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { CountdownTimer } from '@/components/CountdownTimer';
-import { FraudScoreMeter } from '@/components/FraudScoreMeter';
-import { useDemo } from '@/context/DemoContext';
-import { generateMockReturns, ReturnItem } from '@/utils/fraudLogic';
-import { getStatusDisplay, type ReturnStatus } from '@/config/statusDisplay';
-import { 
-  Store, 
-  Search, 
-  Filter,
-  RefreshCw,
-  Eye,
-  ChevronLeft,
-  ChevronRight
-} from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { supabase } from '@/supabase';
+
+type ReturnItem = {
+    id: string;
+    customerName: string;
+    orderId: string;
+    itemName: string;
+    reason: string;
+    returnType: string;
+    submittedAt: Date;
+    fraudScore: number;
+    status: string;
+    inspectionStage: number;
+    expiresAt: Date;
+    imageUrl?: string;
+    notes?: string;
+};
+
+const normalizeStatus = (status?: string) => status?.toLowerCase().trim() ?? 'pending';
 
 const SellerPortal = () => {
-  const { returns } = useDemo();
-  const [allReturns, setAllReturns] = useState<ReturnItem[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5;
+    console.log('SellerPortal mounted');
+    const [allReturns, setAllReturns] = useState<ReturnItem[]>([]);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [statusFilter, setStatusFilter] = useState('all');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [loading, setLoading] = useState(true);
+    const [fetchError, setFetchError] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Merge context returns with mock data
-    const mockReturns = generateMockReturns(12);
-    setAllReturns([...returns, ...mockReturns]);
-  }, [returns]);
+    const itemsPerPage = 5;
 
-  const filteredReturns = allReturns.filter((item) => {
-    const matchesSearch = 
-      item.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.itemName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.orderId.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
-    
-    return matchesSearch && matchesStatus;
-  });
+    useEffect(() => {
+        const fetchReturns = async () => {
+            setLoading(true);
+            setFetchError(null);
 
-  const paginatedReturns = filteredReturns.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+            console.log('Fetching returns from Supabase...');
 
-  const totalPages = Math.ceil(filteredReturns.length / itemsPerPage);
+            const { data, error } = await supabase
+                .from('returns')
+                .select('*')
+                .order('created_at', { ascending: false });
+            if (error) {
+                console.error('Supabase error:', error);
+                setFetchError(error.message);
+                setAllReturns([]);
+                setLoading(false);
+                return;
+            }
 
-  return (
-    <div className="min-h-screen bg-background p-8">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-          <div className="animate-slide-up">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-12 h-12 rounded-xl gradient-primary flex items-center justify-center">
-                <Store className="w-6 h-6 text-primary-foreground" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold">Seller Portal</h1>
-                <p className="text-muted-foreground text-sm">Manage your return inspections</p>
-              </div>
-            </div>
-          </div>
+            console.log('Fetched returns from Supabase:', data);
 
-          <div className="flex flex-col sm:flex-row gap-3 animate-fade-in">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search returns..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 w-full sm:w-64"
-              />
-            </div>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="h-10 px-3 rounded-lg border border-input bg-background text-sm"
-            >
-              <option value="all">All Status</option>
-              <option value="approved">Approved</option>
-              <option value="flagged">Flagged</option>
-              <option value="rejected">Rejected</option>
-            </select>
-          </div>
-        </div>
+            const mapped: ReturnItem[] = (data ?? []).map((row: any) => ({
+                id: String(row.id),
+                customerName: row.customer_name ?? 'Unknown Customer',
+                orderId: row.order_id ?? 'N/A',
+                itemName: row.item_name ?? 'Unknown Item',
+                reason: row.reason ?? '',
+                returnType: row.return_type ?? 'standard',
+                submittedAt: row.created_at ? new Date(row.created_at) : new Date(),
+                fraudScore: typeof row.fraud_score === 'number' ? row.fraud_score : 0,
+                status: normalizeStatus(row.status),
+                inspectionStage: typeof row.inspection_stage === 'number' ? row.inspection_stage : 0,
+                expiresAt: row.expires_at ? new Date(row.expires_at) : new Date(),
+                imageUrl: row.image_url ?? undefined,
+                notes: row.notes ?? undefined,
+            }));
 
-        {/* Stats Summary */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          {[
-            { label: 'Total Returns', value: allReturns.length, variant: 'default' as const },
-            { label: 'Approved', value: allReturns.filter(r => r.status === 'approved').length, variant: 'success' as const },
-            { label: 'Flagged', value: allReturns.filter(r => r.status === 'flagged').length, variant: 'warning' as const },
-            { label: 'Rejected', value: allReturns.filter(r => r.status === 'rejected').length, variant: 'destructive' as const },
-          ].map((stat, i) => (
-            <div key={i} className="bg-card rounded-xl border p-4 shadow-card animate-scale-in" style={{ animationDelay: `${i * 50}ms` }}>
-              <p className="text-sm text-muted-foreground">{stat.label}</p>
-              <p className="text-2xl font-bold mt-1">{stat.value}</p>
-            </div>
-          ))}
-        </div>
+            setAllReturns(mapped);
+            setLoading(false);
+        };
 
-        {/* Returns Table */}
-        <div className="bg-card rounded-2xl border shadow-card overflow-hidden animate-fade-in">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  <th className="text-left p-4 font-semibold text-sm">Customer</th>
-                  <th className="text-left p-4 font-semibold text-sm">Product</th>
-                  <th className="text-left p-4 font-semibold text-sm">Fraud Score</th>
-                  <th className="text-left p-4 font-semibold text-sm">Status</th>
-                  <th className="text-left p-4 font-semibold text-sm">Time Remaining</th>
-                  <th className="text-left p-4 font-semibold text-sm">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedReturns.map((item, index) => (
-                  <tr 
-                    key={item.id} 
-                    className="border-b last:border-0 hover:bg-muted/30 transition-colors"
-                  >
-                    <td className="p-4">
-                      <div>
-                        <p className="font-medium">{item.customerName}</p>
-                        <p className="text-sm text-muted-foreground">{item.orderId}</p>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <p className="font-medium">{item.itemName}</p>
-                      <p className="text-sm text-muted-foreground capitalize">{item.returnType}</p>
-                    </td>
-                    <td className="p-4">
-                      <FraudScoreMeter score={item.fraudScore} size="sm" />
-                    </td>
-                    <td className="p-4">
-                      {(() => {
-                        const { icon: StatusIcon, badgeClassName, label } = getStatusDisplay(
-                          item.status as ReturnStatus
-                        );
-                        return (
-                          <Badge className={badgeClassName}>
-                            <StatusIcon className="w-4 h-4" />
-                            <span className="ml-1">{label}</span>
-                          </Badge>
-                        );
-                      })()}
-                    </td>
-                    <td className="p-4 min-w-[140px]">
-                      <CountdownTimer expiresAt={item.expiresAt} />
-                    </td>
-                    <td className="p-4">
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm">
-                          <Eye className="w-3 h-3" />
-                          Review
-                        </Button>
-                        <Button variant="ghost" size="sm">
-                          <RefreshCw className="w-3 h-3" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        fetchReturns();
+    }, []);
 
-          {/* Pagination */}
-          <div className="flex items-center justify-between p-4 border-t bg-muted/30">
-            <p className="text-sm text-muted-foreground">
-              Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredReturns.length)} of {filteredReturns.length} results
-            </p>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
-              {Array.from({ length: totalPages }, (_, i) => (
-                <Button
-                  key={i}
-                  variant={currentPage === i + 1 ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setCurrentPage(i + 1)}
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, statusFilter]);
+
+    const filteredReturns = useMemo(() => {
+        const query = searchQuery.toLowerCase();
+
+        return allReturns.filter((item) => {
+            const matchesSearch =
+                item.customerName.toLowerCase().includes(query) ||
+                item.itemName.toLowerCase().includes(query) ||
+                item.orderId.toLowerCase().includes(query);
+
+            const matchesStatus =
+                statusFilter === 'all' || normalizeStatus(item.status) === statusFilter;
+
+            return matchesSearch && matchesStatus;
+        });
+    }, [allReturns, searchQuery, statusFilter]);
+
+    const paginatedReturns = useMemo(() => {
+        const start = (currentPage - 1) * itemsPerPage;
+        return filteredReturns.slice(start, start + itemsPerPage);
+    }, [filteredReturns, currentPage]);
+
+    const totalPages = Math.max(1, Math.ceil(filteredReturns.length / itemsPerPage));
+
+    const approvedCount = allReturns.filter((r) => normalizeStatus(r.status) === 'approved').length;
+    const flaggedCount = allReturns.filter((r) => normalizeStatus(r.status) === 'flagged').length;
+    const rejectedCount = allReturns.filter((r) => normalizeStatus(r.status) === 'rejected').length;
+
+    const getStatusColor = (status: string) => {
+        switch (normalizeStatus(status)) {
+            case 'approved':
+                return '#dcfce7';
+            case 'flagged':
+                return '#fef3c7';
+            case 'rejected':
+                return '#fee2e2';
+            default:
+                return '#e5e7eb';
+        }
+    };
+
+    const getTimeRemaining = (expiresAt: Date) => {
+        const now = new Date().getTime();
+        const end = expiresAt.getTime();
+        const diff = end - now;
+
+        if (diff <= 0) return 'Expired';
+
+        const hours = Math.floor(diff / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+        if (hours > 24) {
+            const days = Math.floor(hours / 24);
+            return `${days}d ${hours % 24}h`;
+        }
+
+        return `${hours}h ${minutes}m`;
+    };
+
+    return (
+        <div style={{ minHeight: '100vh', background: '#f8fafc', padding: '32px' }}>
+            <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+                <div style={{ marginBottom: '24px' }}>
+                    <h1 style={{ fontSize: '32px', fontWeight: 700, marginBottom: '8px' }}>
+                        Seller Portal
+                    </h1>
+                    <p style={{ color: '#64748b' }}>Manage live return inspections from Supabase</p>
+                </div>
+
+                <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' }}>
+                    <input
+                        type="text"
+                        placeholder="Search returns..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        style={{
+                            padding: '10px 12px',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '8px',
+                            minWidth: '260px',
+                        }}
+                    />
+
+                    <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        style={{
+                            padding: '10px 12px',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '8px',
+                        }}
+                    >
+                        <option value="all">All Status</option>
+                        <option value="approved">Approved</option>
+                        <option value="flagged">Flagged</option>
+                        <option value="rejected">Rejected</option>
+                        <option value="pending">Pending</option>
+                    </select>
+                </div>
+
+                {fetchError && (
+                    <div
+                        style={{
+                            marginBottom: '20px',
+                            padding: '12px 16px',
+                            borderRadius: '8px',
+                            background: '#fef2f2',
+                            color: '#991b1b',
+                            border: '1px solid #fecaca',
+                        }}
+                    >
+                        Error loading returns: {fetchError}
+                    </div>
+                )}
+
+                <div
+                    style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                        gap: '16px',
+                        marginBottom: '24px',
+                    }}
                 >
-                  {i + 1}
-                </Button>
-              )).slice(0, 5)}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-              >
-                <ChevronRight className="w-4 h-4" />
-              </Button>
+                    {[
+                        { label: 'Total Returns', value: allReturns.length },
+                        { label: 'Approved', value: approvedCount },
+                        { label: 'Flagged', value: flaggedCount },
+                        { label: 'Rejected', value: rejectedCount },
+                    ].map((stat) => (
+                        <div
+                            key={stat.label}
+                            style={{
+                                background: 'white',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '12px',
+                                padding: '16px',
+                            }}
+                        >
+                            <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>{stat.label}</p>
+                            <p style={{ margin: '8px 0 0 0', fontSize: '28px', fontWeight: 700 }}>
+                                {stat.value}
+                            </p>
+                        </div>
+                    ))}
+                </div>
+
+                <div
+                    style={{
+                        background: 'white',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '16px',
+                        overflow: 'hidden',
+                    }}
+                >
+                    <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <thead>
+                                <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                                    <th style={{ textAlign: 'left', padding: '14px' }}>Customer</th>
+                                    <th style={{ textAlign: 'left', padding: '14px' }}>Product</th>
+                                    <th style={{ textAlign: 'left', padding: '14px' }}>Fraud Score</th>
+                                    <th style={{ textAlign: 'left', padding: '14px' }}>Status</th>
+                                    <th style={{ textAlign: 'left', padding: '14px' }}>Time Left</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {loading ? (
+                                    <tr>
+                                        <td colSpan={5} style={{ padding: '24px', textAlign: 'center' }}>
+                                            Loading returns...
+                                        </td>
+                                    </tr>
+                                ) : paginatedReturns.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={5} style={{ padding: '24px', textAlign: 'center' }}>
+                                            No returns found.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    paginatedReturns.map((item) => (
+                                        <tr key={item.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                            <td style={{ padding: '14px' }}>
+                                                <div>
+                                                    <div style={{ fontWeight: 600 }}>{item.customerName}</div>
+                                                    <div style={{ fontSize: '13px', color: '#64748b' }}>{item.orderId}</div>
+                                                </div>
+                                            </td>
+                                            <td style={{ padding: '14px' }}>
+                                                <div>
+                                                    <div style={{ fontWeight: 600 }}>{item.itemName}</div>
+                                                    <div style={{ fontSize: '13px', color: '#64748b' }}>
+                                                        {item.returnType}
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td style={{ padding: '14px' }}>{item.fraudScore}</td>
+                                            <td style={{ padding: '14px' }}>
+                                                <span
+                                                    style={{
+                                                        padding: '6px 10px',
+                                                        borderRadius: '999px',
+                                                        background: getStatusColor(item.status),
+                                                        fontSize: '13px',
+                                                        fontWeight: 600,
+                                                        textTransform: 'capitalize',
+                                                    }}
+                                                >
+                                                    {item.status}
+                                                </span>
+                                            </td>
+                                            <td style={{ padding: '14px' }}>{getTimeRemaining(item.expiresAt)}</td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div
+                        style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            padding: '14px 16px',
+                            background: '#f8fafc',
+                        }}
+                    >
+                        <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>
+                            {filteredReturns.length === 0
+                                ? 'Showing 0 results'
+                                : `Showing ${(currentPage - 1) * itemsPerPage + 1} to ${Math.min(
+                                    currentPage * itemsPerPage,
+                                    filteredReturns.length
+                                )} of ${filteredReturns.length} results`}
+                        </p>
+
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <button
+                                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                                disabled={currentPage === 1}
+                            >
+                                Prev
+                            </button>
+                            <button
+                                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                                disabled={currentPage === totalPages || filteredReturns.length === 0}
+                            >
+                                Next
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
-          </div>
         </div>
-      </div>
-    </div>
-  );
+    );
 };
 
 export default SellerPortal;

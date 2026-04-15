@@ -7,7 +7,7 @@ import { DemoProvider } from "@/context/DemoContext";
 import { AppSidebar } from "@/components/AppSidebar";
 import Landing from "./pages/Landing";
 import CustomerPortal from "./pages/CustomerPortal";
-import SellerPortal from "./pages/SellerPortal";
+import SellerPortal from "./components/SellerPortal";
 import AdminDashboard from "./pages/AdminDashboard";
 import InspectionSimulation from "./pages/InspectionSimulation";
 import NotFound from "./pages/NotFound";
