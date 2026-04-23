@@ -63,7 +63,7 @@ describe('fraudLogic', () => {
 
     it('returns correct class names for pending and default', () => {
       expect(getStatusBgColor('pending')).toBe('bg-muted text-muted-foreground border-border');
-      expect(getStatusBgColor('unknown')).toBe('bg-muted text-muted-foreground border-border');
+      expect(getStatusBgColor('unknown' as never)).toBe('bg-muted text-muted-foreground border-border');
     });
   });
 
